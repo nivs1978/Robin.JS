@@ -481,7 +481,7 @@ class RuleMachine {
       case 23: { const loc = this.location(cursor); if (loc === 0xffff) { cursor.read(); cursor.read(); cursor.read(); return false; } const level = cursor.read(); return this.byteCompare(this.world.cube(loc >> 8, loc & 255, level), cursor.read(), cursor.read()); }
       case 24: return this.mobileLocation(this.objectNumber(cursor)) !== 0xffff;
       case 25: { const type = cursor.read() & 255; if ((this.ownerSignal >> 8) !== type) return false; this.it = this.ownerSignal & 255; return true; }
-      case 26: { const mode = cursor.read() & 255; const submode = cursor.read() & 255; return mobile(this.owner).attributes[0] === mode & mobile(this.owner).attributes[1] === submode; }
+      case 26: { const mode = cursor.read() & 255; const submode = cursor.read() & 255; return (mobile(this.owner).attributes[0] === mode) && (mobile(this.owner).attributes[1] === submode); }
       case 27: return mobile(this.owner).attributes[0] === (cursor.read() & 255);
       case 28:
       case 29: { const button = cursor.read(); return (opcode === 28 ? [1, 3].includes(this.world.pendingInput) : this.world.pendingInput === 2) && this.world.buttonNumber === button; }
@@ -690,7 +690,7 @@ class RuleMachine {
       }
       case 63: {
         const fallback = cursor.read() & 255; let best = 0; let chosen = fallback;
-        for (const proposal of this.proposals) if ((proposal & 255) > best) { best = proposal & 255; chosen = proposal >> 8; }
+        for (const proposal of this.proposals) if (proposal.score > best) { best = proposal.score; chosen = proposal.mode; }
         mobile(this.owner).setMode(chosen); return;
       }
       case 64: mobile(this.objectNumber(cursor)).puff = 4; return;

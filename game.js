@@ -105,6 +105,8 @@ const game = {
   viewX: 0,
   viewY: 0,
   intervalCount: 0,
+  introFrame: 0,
+  interruptFade: false,
   pendingTime: 0,
   animationCount: 0,
   frozen: false,
@@ -292,7 +294,7 @@ Promise.all([
     };
     game.printText = (text, x, y) => game.screenCommands.push({ type: "text", text, x, y });
     loadStatus();
-    ruleMachine = new window.RobinEngine.RuleMachine(gameProgram, game);
+    ruleMachine = new window.RobinEngine.RuleMachine(gameProgram, game, Math.floor(Math.random() * 65536));
     window.gameProgram = gameProgram;
   })
   .catch((error) => console.error(error));
@@ -862,6 +864,7 @@ function checkAerialExit() {
     }
   } else return false;
   game.aerialView = false;
+  game.interruptFade = true;
   game.pendingTime = 0;
   game.returnToGameScreen(false);
   return true;
@@ -869,6 +872,7 @@ function checkAerialExit() {
 
 function advanceWorldTick() {
   game.intervalCount++;
+  game.introFrame = game.introFrame + 1 & 7;
   game.animationCount ^= 1;
   if (game.frozen) return;
   if (game.aerialView) {
@@ -878,7 +882,8 @@ function advanceWorldTick() {
     checkInteractions();
     updateStung();
     receiveSignals();
-    layFloor();
+    updateCarriedMobiles();
+    updateCells();
     return;
   }
   followCamera();
@@ -990,9 +995,8 @@ function drawTitle() {
   drawImage(loadImage(imagePath), 0, 0, 320, 200);
   for (const animation of game.introAnimations) {
     if (!animation) continue;
-    const frame = animation.frames[(game.step >> 1) & 7];
-    const icon = `intro/ide${String(frame).padStart(3, "0")}.png`;
-    drawImage(loadImage(icon), animation.x, animation.y, 16, 16);
+    const frame = animation.frames[game.introFrame];
+    drawImage(loadImage(`ideogram/ide${String(frame).padStart(3, "0")}.png`), animation.x, animation.y, 16, 16);
   }
   drawSpeech();
 }
@@ -1541,21 +1545,21 @@ canvas.addEventListener("pointerup", handlePointer);
 canvas.addEventListener("pointermove", handlePointer);
 window.addEventListener("blur", () => { game.paused = true; });
 window.addEventListener("focus", () => { game.paused = false; });
-let lastTick = 0;
 let lastFrame = 0;
 function animate(timestamp) {
-  const elapsed = lastFrame === 0 ? 0 : Math.min((timestamp - lastFrame) / 1000, 0.25);
+  const elapsed = lastFrame === 0 ? 0 : Math.min((timestamp - lastFrame) / 1000, 0.1);
   lastFrame = timestamp;
+  const fading = game.fadeBusy;
   advanceFade(elapsed);
-  game.pendingTime += elapsed;
-  const interval = 0x5d37 * 11 / 1193182;
-  while (game.pendingTime >= interval) {
-    game.pendingTime -= interval;
-    advanceWorldTick();
-  }
-  if (timestamp - lastTick >= 140) {
-    game.step++;
-    lastTick = timestamp;
+  // A fade run by the aerial-view exit happens inside the timer handler, which ignores nested ticks meanwhile.
+  if (fading && game.interruptFade) game.interruptFade = game.fadeBusy;
+  else {
+    game.pendingTime += elapsed;
+    const interval = 0x5d37 * 11 / 1193182;
+    while (game.pendingTime >= interval) {
+      game.pendingTime -= interval;
+      advanceWorldTick();
+    }
   }
   ruleMachine?.update();
   requestAnimationFrame(animate);
